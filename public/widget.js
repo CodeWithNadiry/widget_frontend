@@ -1,6 +1,6 @@
 (function () {
   const iframe = document.createElement("iframe");
-  iframe.src = "http://localhost:3000/chat/" + window.HotelBotSlug;
+  iframe.src = "https://widget-frontend-three.vercel.app/chat/" + window.HotelBotSlug;
   iframe.style.cssText = [
     "position:fixed",
     "bottom:0",
