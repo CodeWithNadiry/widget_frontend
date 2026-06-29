@@ -5,18 +5,39 @@ import { useRouter } from "next/navigation";
 import { useCreateChatbot } from "@/hooks/useChatbots";
 import Link from "next/link";
 
+const COLOR_FIELDS = [
+  { key: "primaryColor", label: "Primary color", hint: "Buttons, user bubble, float button" },
+  { key: "headerBg",     label: "Header background", hint: "Top bar of the chat widget" },
+  { key: "aiBubbleBg",  label: "AI message bubble", hint: "Background of assistant replies" },
+];
+
 export default function NewChatbotPage() {
   const router = useRouter();
   const { mutate: createChatbot, isPending, error } = useCreateChatbot();
 
-  const [form, setForm] = useState({ name: "", slug: "", systemPrompt: "" });
+  const [form, setForm] = useState({
+    name: "",
+    slug: "",
+    systemPrompt: "",
+    theme: {
+      primaryColor: "#2563eb",
+      headerBg:     "#0f172a",
+      aiBubbleBg:   "#ffffff",
+    },
+  });
 
   function handleChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
+  function handleThemeChange(key, value) {
+    
+    setForm((prev) => ({ ...prev, theme: { ...prev.theme, [key]: value } }));
+  }
+
   function handleSubmit(e) {
     e.preventDefault();
+    console.log('creating chatbot form:', form)
     createChatbot(form, { onSuccess: () => router.push("/chatbots") });
   }
 
@@ -37,6 +58,7 @@ export default function NewChatbotPage() {
 
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {/* Name */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">Chatbot name</label>
             <input
@@ -49,6 +71,7 @@ export default function NewChatbotPage() {
             />
           </div>
 
+          {/* Slug */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">Slug</label>
             <input
@@ -62,6 +85,7 @@ export default function NewChatbotPage() {
             <p className="text-xs text-slate-400">Lowercase letters, numbers, and hyphens only. Used in the embed URL.</p>
           </div>
 
+          {/* System prompt */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">System prompt</label>
             <textarea
@@ -70,9 +94,31 @@ export default function NewChatbotPage() {
               onChange={handleChange}
               required
               rows={5}
-              placeholder="You are a helpful hotel concierge for Grand Crito Hotel. Answer guest questions about amenities, check-in times, and local recommendations…"
+              placeholder="You are a helpful hotel concierge for Grand Crito Hotel…"
               className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[15px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition resize-none"
             />
+          </div>
+
+          {/* Theme colors */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-700">Widget theme</label>
+            <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              {COLOR_FIELDS.map(({ key, label, hint }) => (
+                <div key={key} className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={form.theme[key]}
+                    onChange={(e) => handleThemeChange(key, e.target.value)}
+                    className="w-9 h-9 rounded-lg border border-slate-300 cursor-pointer p-0.5 bg-white"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium text-slate-700">{label}</p>
+                    <p className="text-xs text-slate-400">{hint}</p>
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono shrink-0">{form.theme[key]}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
           {error && (

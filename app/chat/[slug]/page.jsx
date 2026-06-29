@@ -1,40 +1,43 @@
-"use client";
+// app/chat/[slug]/page.jsx
 
-import { use, useEffect, useState } from "react";
 import ChatWidget from "@/widget/ChatWidget";
 
-export default function ChatPage({ params }) {
-  const { slug } = use(params);
-  const [chatbotId, setChatbotId] = useState(null);
-  const [name, setName] = useState("Hotel Assistant");
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/chatbot/${slug}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.chatbot) {
-          setChatbotId(data.chatbot.chatbotId);
-          setName(data.chatbot.name);
-        } else {
-          setError("Chatbot not found.");
-        }
-      })
-      .catch(() => setError("Failed to load chatbot."));
-  }, [slug]);
+const DEFAULT_THEME = {
+  primaryColor: "#2563eb",
+  headerBg:     "#0f172a",
+  aiBubbleBg:   "#ffffff",
+};
 
-  if (error)
+async function getChatbot(slug) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/chatbot/${slug}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.chatbot;
+}
+
+export default async function ChatPage({ params }) {
+  const { slug } = await params;                    // ← fix: await params first
+  const chatbot = await getChatbot(slug);
+
+  if (!chatbot) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-sm text-red-500">{error}</p>
+      <div className="flex items-center justify-center h-screen text-slate-500 text-sm">
+        Chatbot not found.
       </div>
     );
+  }
 
-  if (!chatbotId) return null;
+  const theme = { ...DEFAULT_THEME, ...chatbot.theme };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <ChatWidget chatbotId={chatbotId} title={name} />
-    </div>
+    <ChatWidget
+      chatbotId={chatbot.chatbotId}
+      title={chatbot.name}
+      theme={theme}
+    />
   );
 }

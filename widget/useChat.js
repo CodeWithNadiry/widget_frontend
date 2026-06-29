@@ -30,7 +30,11 @@ export function useChat(chatbotId) {
 
         setMessages([{ role: "assistant", content: data.reply }]);
       } catch (err) {
-        setError(typeof err.message === "string" ? err.message : JSON.stringify(err.message));
+        setError(
+          typeof err.message === "string"
+            ? err.message
+            : JSON.stringify(err.message),
+        );
       } finally {
         setIsLoading(false);
       }
@@ -45,7 +49,7 @@ export function useChat(chatbotId) {
       if (!text.trim()) return;
 
       setMessages((prev) => [...prev, { role: "user", content: text }]);
-      setIsLoading(true);
+      setIsLoading(true)
       setError(null);
 
       try {
@@ -64,7 +68,11 @@ export function useChat(chatbotId) {
           { role: "assistant", content: data.reply },
         ]);
       } catch (err) {
-        setError(typeof err.message === "string" ? err.message : JSON.stringify(err.message));
+        setError(
+          typeof err.message === "string"
+            ? err.message
+            : JSON.stringify(err.message),
+        );
       } finally {
         setIsLoading(false);
       }
