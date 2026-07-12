@@ -2,11 +2,12 @@
 
 import ChatWidget from "@/widget/ChatWidget";
 
-
 const DEFAULT_THEME = {
   primaryColor: "#2563eb",
   headerBg:     "#0f172a",
   aiBubbleBg:   "#ffffff",
+  chatbg:       "#f8fafc",
+  headerTextColor: '#ffffff'
 };
 
 async function getChatbot(slug) {
@@ -20,7 +21,7 @@ async function getChatbot(slug) {
 }
 
 export default async function ChatPage({ params }) {
-  const { slug } = await params;                    // ← fix: await params first
+  const { slug } = await params;
   const chatbot = await getChatbot(slug);
 
   if (!chatbot) {
@@ -31,7 +32,7 @@ export default async function ChatPage({ params }) {
     );
   }
 
-  const theme = { ...DEFAULT_THEME, ...chatbot.theme };
+  const theme = { ...DEFAULT_THEME, ...chatbot.theme, logoUrl: chatbot.logoUrl };
 
   return (
     <ChatWidget

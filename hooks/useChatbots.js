@@ -89,3 +89,28 @@ export function useUpdateChatbot(chatbotId) {
     },
   });
 }
+
+export function useUploadChatbotLogo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ chatbotId, file }) => {
+      const formData = new FormData();
+      formData.append("logo", file);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/chatbot/${chatbotId}/logo`,
+        { method: "POST", body: formData },
+      );
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Upload failed.");
+      }
+      return res.json(); // { logoUrl }
+    },
+    onSuccess: (_data, { chatbotId }) => {
+      qc.invalidateQueries({ queryKey: ["chatbots", chatbotId] });
+      qc.invalidateQueries({ queryKey: ["chatbots"] });
+    },
+  });
+}

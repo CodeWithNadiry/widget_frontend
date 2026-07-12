@@ -2,18 +2,22 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCreateChatbot } from "@/hooks/useChatbots";
+import { useCreateChatbot, useUploadChatbotLogo } from "@/hooks/useChatbots";
 import Link from "next/link";
+import ColorField from "@/components/ColorField";
 
 const COLOR_FIELDS = [
   { key: "primaryColor", label: "Primary color", hint: "Buttons, user bubble, float button" },
-  { key: "headerBg",     label: "Header background", hint: "Top bar of the chat widget" },
-  { key: "aiBubbleBg",  label: "AI message bubble", hint: "Background of assistant replies" },
+  { key: "headerBg", label: "Header background", hint: "Top bar of the chat widget" },
+  { key: "aiBubbleBg", label: "AI message bubble", hint: "Background of assistant replies" },
+  { key: "chatbg", label: "Chat background", hint: "Background of the whole conversation area" },
+  { key: "headerTextColor", label: "Header Text Color", hint: "Color of the header text." },
 ];
 
 export default function NewChatbotPage() {
   const router = useRouter();
-  const { mutate: createChatbot, isPending, error } = useCreateChatbot();
+  const { mutate: createChatbot, isPending: isCreating, error: createError } = useCreateChatbot();
+  const { mutate: uploadLogo, isPending: isUploadingLogo, error: logoError } = useUploadChatbotLogo();
 
   const [form, setForm] = useState({
     name: "",
@@ -21,29 +25,60 @@ export default function NewChatbotPage() {
     systemPrompt: "",
     theme: {
       primaryColor: "#2563eb",
-      headerBg:     "#0f172a",
-      aiBubbleBg:   "#ffffff",
+      headerBg: "#0f172a",
+      aiBubbleBg: "#ffffff",
+      chatbg: "#f8fafc",
+      headerTextColor: '#ffffff'
     },
   });
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+
+  const isPending = isCreating || isUploadingLogo;
+  const error = createError || logoError;
 
   function handleChange(e) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
   function handleThemeChange(key, value) {
-    
     setForm((prev) => ({ ...prev, theme: { ...prev.theme, [key]: value } }));
+  }
+
+  function handleLogoSelect(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
   }
 
   function handleSubmit(e) {
     e.preventDefault();
-    console.log('creating chatbot form:', form)
-    createChatbot(form, { onSuccess: () => router.push("/chatbots") });
+
+    createChatbot(form, {
+      onSuccess: (data) => {
+        const chatbotId = data.chatbot.chatbotId;
+
+        // No logo picked — done, go straight to the list.
+        if (!logoFile) {
+          router.push("/chatbots");
+          return;
+        }
+
+        // Logo picked — upload it against the newly created chatbot's id,
+        // then navigate regardless of outcome (a failed logo upload
+        // shouldn't strand the admin on this page; the chatbot itself
+        // was created successfully).
+        uploadLogo(
+          { chatbotId, file: logoFile },
+          { onSettled: () => router.push("/chatbots") },
+        );
+      },
+    });
   }
 
   return (
     <div className="max-w-lg flex flex-col gap-6">
-      {/* Back */}
       <Link href="/chatbots" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors w-fit">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M15 18l-6-6 6-6" />
@@ -53,11 +88,36 @@ export default function NewChatbotPage() {
 
       <div>
         <h1 className="text-xl font-semibold text-slate-900">New chatbot</h1>
-        <p className="text-[15px] text-slate-500 mt-0.5">Set up a new AI chatbot for your property</p>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-xl p-6">
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          {/* Logo */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-700">Chatbot logo</label>
+            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="w-14 h-14 rounded-full overflow-hidden bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                {logoPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoPreview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-slate-300 text-[11px]">No logo</span>
+                )}
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoSelect}
+                  className="text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 file:text-sm file:font-medium hover:file:bg-blue-100 cursor-pointer"
+                />
+                <p className="text-xs text-slate-400">
+                  {logoFile ? "Uploaded once you create the chatbot." : "Optional — you can add this later too."}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Name */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-slate-700">Chatbot name</label>
@@ -101,25 +161,19 @@ export default function NewChatbotPage() {
 
           {/* Theme colors */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-700">Widget theme</label>
-            <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              {COLOR_FIELDS.map(({ key, label, hint }) => (
-                <div key={key} className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={form.theme[key]}
-                    onChange={(e) => handleThemeChange(key, e.target.value)}
-                    className="w-9 h-9 rounded-lg border border-slate-300 cursor-pointer p-0.5 bg-white"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-medium text-slate-700">{label}</p>
-                    <p className="text-xs text-slate-400">{hint}</p>
-                  </div>
-                  <span className="text-xs text-slate-400 font-mono shrink-0">{form.theme[key]}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+  <label className="text-sm font-medium text-slate-700">Widget theme</label>
+  <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+    {COLOR_FIELDS.map(({ key, label, hint }) => (
+      <ColorField
+        key={key}
+        label={label}
+        hint={hint}
+        value={form.theme[key]}
+        onChange={(value) => handleThemeChange(key, value)}
+      />
+    ))}
+  </div>
+</div>
 
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3.5 py-2.5">
@@ -133,7 +187,7 @@ export default function NewChatbotPage() {
               disabled={isPending}
               className="h-10 px-5 bg-blue-600 text-white text-[15px] font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm"
             >
-              {isPending ? "Creating…" : "Create chatbot"}
+              {isCreating ? "Creating…" : isUploadingLogo ? "Uploading logo…" : "Create chatbot"}
             </button>
             <button
               type="button"

@@ -4,7 +4,7 @@ import remarkBreaks from "remark-breaks";
 
 export default function AssistantMessage({ content }) {
   // Strip any ━━━ divider lines the model leaks into replies
-  const cleaned = content
+  const cleaned = (content || "")
     .replace(/^━+.*$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -21,9 +21,7 @@ export default function AssistantMessage({ content }) {
           ),
 
           strong: ({ children }) => (
-            <strong className="font-semibold text-slate-900">
-              {children}
-            </strong>
+            <strong className="font-semibold text-slate-900">{children}</strong>
           ),
 
           em: ({ children }) => (

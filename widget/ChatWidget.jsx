@@ -2,12 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "./useChat";
-import AssistantMessage from "./AssistantMessage";
+import AssistantReply from "./AssistantReply";
+import BookingModal from "./BookingModal";
 
 const DEFAULT_THEME = {
   primaryColor: "#2563eb",
   headerBg: "#0f172a",
   aiBubbleBg: "#ffffff",
+  chatbg: "#f8fafc",
+  headerTextColor: "#ffffff",
 };
 
 function useChatSize() {
@@ -33,6 +36,36 @@ function useChatSize() {
   return size;
 }
 
+function Avatar({ theme, size = 24 }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (theme.logoUrl && !imgError) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={theme.logoUrl}
+        alt=""
+        onError={() => setImgError(true)}
+        className="rounded-full shrink-0 object-cover"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full flex items-center justify-center shrink-0"
+      style={{ width: size, height: size, backgroundColor: theme.headerBg }}
+    >
+      <span
+        className="font-bold"
+        style={{ fontSize: size * 0.375, color: theme.headerTextColor }}
+      >
+        AI
+      </span>
+    </div>
+  );
+}
+
 export default function ChatWidget({
   chatbotId,
   title = "Hotel Assistant",
@@ -41,10 +74,11 @@ export default function ChatWidget({
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [input, setInput] = useState("");
-  const [hasOpened, setHasOpened] = useState(false);
+  const [interactionStarted, setInteractionStarted] = useState(false);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const bottomRef = useRef(null);
 
-  const { messages, sendMessage, isLoading, error } = useChat(chatbotId);
+  const { messages, sendMessage, sendAction, searchOffers, isLoading, error } = useChat(chatbotId);
   const size = useChatSize();
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
@@ -53,10 +87,19 @@ export default function ChatWidget({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  function handleOpen() {
-    setIsOpen(true);
-    if (!hasOpened) setHasOpened(true);
-  }
+  useEffect(() => {
+    const hasUserMessage = messages.some((m) => m.role === "user");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (hasUserMessage) setInteractionStarted(true);
+  }, [messages]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (last?.role === "assistant" && last.reply?.type === "reopen_modal") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setBookingModalOpen(true);
+    }
+  }, [messages]);
 
   function handleSend() {
     if (!input.trim() || isLoading) return;
@@ -71,18 +114,46 @@ export default function ChatWidget({
     }
   }
 
+  function handleAskQuestion() {
+    setInteractionStarted(true);
+    sendAction("__ask_question__");
+  }
+
+  function handleBookAStay() {
+    setBookingModalOpen(true);
+  }
+
+  async function handleModalSearch(formValues) {
+    const ok = await searchOffers(formValues);
+    if (ok) {
+      setInteractionStarted(true);
+      setBookingModalOpen(false);
+    }
+    return ok;
+  }
+
+  function handleOfferPick(number) {
+    sendMessage(String(number));
+  }
+
+  function handleHotelPick(name) {
+    sendMessage(name);
+  }
+
+  const lastMessage = messages[messages.length - 1];
+  const showWelcomeButtons =
+    !interactionStarted &&
+    lastMessage?.role === "assistant" &&
+    lastMessage.reply?.type === "welcome";
+
   const panelWidth = isExpanded && !isMobile ? "min(680px, 90vw)" : size.width;
-  const panelHeight =
-    isExpanded && !isMobile ? "min(720px, 85vh)" : size.height;
+  const panelHeight = isExpanded && !isMobile ? "min(720px, 85vh)" : size.height;
 
   return (
-    <div
-      className="fixed z-50"
-      style={{ bottom: size.bottom, right: size.right }}
-    >
+    <div className="fixed z-50" style={{ bottom: size.bottom, right: size.right }}>
       {isOpen && (
         <div
-          className="flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl"
+          className="flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xl relative"
           style={{
             width: panelWidth,
             height: panelHeight,
@@ -97,20 +168,14 @@ export default function ChatWidget({
             style={{ backgroundColor: theme.headerBg }}
           >
             <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: theme.primaryColor }}
-              >
-                <span className="text-white text-xs font-semibold">AI</span>
-              </div>
+              <Avatar theme={theme} size={32} />
               <div>
-                <p className="text-sm font-semibold text-white leading-tight">
+                <p
+                  className="text-sm  lg:text-md font-semibold leading-tight"
+                  style={{ color: theme.headerTextColor }}
+                >
                   {title}
                 </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                  <p className="text-xs text-green-400">Online</p>
-                </div>
               </div>
             </div>
 
@@ -119,18 +184,12 @@ export default function ChatWidget({
                 <button
                   onClick={() => setIsExpanded((v) => !v)}
                   aria-label={isExpanded ? "Shrink" : "Expand"}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  style={{ background: "none", border: "none" }}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                  style={{ background: "none", border: "none", color: theme.headerTextColor, opacity: 0.7 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     {isExpanded ? (
                       <>
                         <path d="M8 3v3a2 2 0 0 1-2 2H3" />
@@ -151,19 +210,13 @@ export default function ChatWidget({
               )}
               <button
                 onClick={() => setIsOpen(false)}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                style={{ background: "none", border: "none" }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                style={{ background: "none", border: "none", color: theme.headerTextColor, opacity: 0.7 }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
                 aria-label="Close"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
@@ -171,18 +224,15 @@ export default function ChatWidget({
           </div>
 
           {/* ── Messages ── */}
-          <div className="flex flex-col gap-3 p-4 overflow-y-auto flex-1 min-h-0 bg-slate-50">
+          <div
+            className="flex flex-col gap-3 p-4 overflow-y-auto flex-1 min-h-0"
+            style={{ backgroundColor: theme.chatbg }}
+          >
             {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && (
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 mr-2 mt-1"
-                    style={{ backgroundColor: theme.headerBg }}
-                  >
-                    <span className="text-white text-[9px] font-bold">AI</span>
+                  <div className="mr-2 mt-1">
+                    <Avatar theme={theme} size={24} />
                   </div>
                 )}
                 <div
@@ -191,32 +241,44 @@ export default function ChatWidget({
                       ? "text-white rounded-br-none leading-snug"
                       : "border border-slate-200 text-slate-700 rounded-bl-none shadow-sm"
                   }`}
-                  style={{
-                    backgroundColor:
-                      msg.role === "user"
-                        ? theme.primaryColor
-                        : theme.aiBubbleBg,
-                  }}
+                  style={{ backgroundColor: msg.role === "user" ? theme.primaryColor : theme.aiBubbleBg }}
                   dir="auto"
                 >
                   {msg.role === "user" ? (
-                    <span>{msg.content}</span>
+                    <span>{msg.text}</span>
                   ) : (
-                    <AssistantMessage content={msg.content} />
+                    <AssistantReply
+                      reply={msg.reply}
+                      onOfferPick={handleOfferPick}
+                      onHotelPick={handleHotelPick}
+                      theme={theme}
+                    />
                   )}
                 </div>
               </div>
             ))}
 
-            {/* Typing indicator */}
+            {showWelcomeButtons && (
+              <div className="flex gap-2 pl-8">
+                <button
+                  onClick={handleBookAStay}
+                  className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
+                  style={{ backgroundColor: theme.primaryColor }}
+                >
+                  Book a Stay
+                </button>
+                <button
+                  onClick={handleAskQuestion}
+                  className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Ask a Question
+                </button>
+              </div>
+            )}
+
             {isLoading && (
               <div className="flex justify-start items-center gap-2">
-                <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: theme.headerBg }}
-                >
-                  <span className="text-white text-[9px] font-bold">AI</span>
-                </div>
+                <Avatar theme={theme} size={24} />
                 <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex gap-1.5 items-center">
                   <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
                   <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
@@ -225,13 +287,13 @@ export default function ChatWidget({
               </div>
             )}
 
-            {error && (
-              <p className="text-xs text-red-500 text-center py-1">{error}</p>
-            )}
+            {error && <p className="text-xs text-red-500 text-center py-1">{error}</p>}
             <div ref={bottomRef} />
           </div>
 
-          {/* ── Input ── */}
+          {/* ── Input — always visible, even before "Ask a Question" is clicked.
+               Guests shouldn't be forced through a button to start typing; the
+               backend already handles a free-typed first message correctly. ── */}
           <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0">
             <input
               value={input}
@@ -250,39 +312,33 @@ export default function ChatWidget({
               Send
             </button>
           </div>
+
+          <BookingModal
+            open={bookingModalOpen}
+            onClose={() => setBookingModalOpen(false)}
+            chatbotId={chatbotId}
+            onSearch={handleModalSearch}
+            theme={theme}
+          />
         </div>
       )}
 
       {/* ── Floating bubble ── */}
       <button
-        onClick={() => (isOpen ? setIsOpen(false) : handleOpen())}
-        className="rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-all hover:opacity-90 hover:scale-105"
+        onClick={() => setIsOpen((v) => !v)}
+        className="rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-all hover:opacity-90 hover:scale-105 overflow-hidden"
         style={{ width: 52, height: 52, backgroundColor: theme.primaryColor }}
         aria-label={isOpen ? "Close chat" : "Open chat"}
       >
         {isOpen ? (
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
             <path d="M18 6L6 18M6 6l12 12" />
           </svg>
+        ) : theme.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={theme.logoUrl} alt="" className="w-full h-full object-cover" />
         ) : (
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         )}

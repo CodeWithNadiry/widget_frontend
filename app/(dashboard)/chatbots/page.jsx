@@ -32,7 +32,6 @@ export default function ChatbotsPage() {
 
   return (
     <div className="max-w-3xl flex flex-col gap-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Chatbots</h1>
@@ -51,7 +50,6 @@ export default function ChatbotsPage() {
         </Link>
       </div>
 
-      {/* List */}
       {isLoading ? (
         <div className="flex flex-col gap-3">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -84,8 +82,13 @@ export default function ChatbotsPage() {
               className="bg-white border border-slate-200 rounded-xl px-4 py-4 flex items-center justify-between gap-4 hover:shadow-sm transition-shadow"
             >
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-xl shrink-0">
-                  🤖
+                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                  {bot.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={bot.logoUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    "🤖"
+                  )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-[15px] font-semibold text-slate-900 truncate">{bot.name}</p>
@@ -112,22 +115,14 @@ export default function ChatbotsPage() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
       <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)}>
         <div className="flex flex-col gap-5 w-80 ">
           <div>
-            <h2 className="text-base font-medium text-slate-900">
-              Delete chatbot
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              This will permanently remove the chatbot. This cannot be undone.
-            </p>
+            <h2 className="text-base font-medium text-slate-900">Delete chatbot</h2>
+            <p className="text-sm text-slate-500 mt-1">This will permanently remove the chatbot. This cannot be undone.</p>
           </div>
           <div className="flex justify-end gap-2">
-            <button
-              onClick={() => setDeleteOpen(false)}
-              className="cursor-pointer text-sm text-slate-500 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50"
-            >
+            <button onClick={() => setDeleteOpen(false)} className="cursor-pointer text-sm text-slate-500 border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50">
               Cancel
             </button>
             <button
