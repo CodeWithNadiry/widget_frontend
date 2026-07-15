@@ -19,8 +19,6 @@ export function useChat(chatbotId) {
       body: JSON.stringify({ sessionId, chatbotId, message }),
     });
     const data = await res.json();
-    console.log("🚀 ~ postChat ~ data:", data)
-    
     if (!res.ok) throw new Error(data.message || "Something went wrong.");
     return data.reply; // { type, text, data }
   }

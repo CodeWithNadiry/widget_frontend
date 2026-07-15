@@ -265,7 +265,7 @@ export default function ChatWidget({
                   className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
                   style={{ backgroundColor: theme.primaryColor }}
                 >
-                  Book a Stay
+                  Book a Room
                 </button>
                 <button
                   onClick={handleAskQuestion}

@@ -101,7 +101,7 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
       >
         <div className="flex items-center justify-between mb-3">
           <p className="text-[14px] font-semibold text-slate-900">
-            {showCalendar ? "Select Dates" : "Book a Stay"}
+            {showCalendar ? "Select Dates" : "Book a Room"}
           </p>
           <button
             onClick={() => (showCalendar ? setShowCalendar(false) : onClose())}
