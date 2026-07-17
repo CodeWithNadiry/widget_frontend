@@ -6,8 +6,7 @@ export default function ChatLayout({ children }) {
           background: transparent !important; 
           margin: 0;
           padding: 0;
-          height: 0;
-          width: 0;
+          height: 100%;
         }
       `}</style>
       {children}

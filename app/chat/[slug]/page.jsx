@@ -1,28 +1,31 @@
 // app/chat/[slug]/page.jsx
-
 import ChatWidget from "@/widget/ChatWidget";
 
 const DEFAULT_THEME = {
   primaryColor: "#2563eb",
-  headerBg:     "#0f172a",
-  aiBubbleBg:   "#ffffff",
-  chatbg:       "#f8fafc",
-  headerTextColor: '#ffffff'
+  headerBg: "#0f172a",
+  aiBubbleBg: "#ffffff",
+  chatbg: "#f8fafc",
+  headerTextColor: "#ffffff",
 };
 
 async function getChatbot(slug) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/chatbot/${slug}`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.chatbot;
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chatbot/${slug}`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.chatbot;
+  } catch {
+    return null;
+  }
 }
 
-export default async function ChatPage({ params }) {
+export default async function ChatPage({ params, searchParams }) {
   const { slug } = await params;
+  const resolvedSearchParams = await searchParams;
   const chatbot = await getChatbot(slug);
+
+  const embedded = resolvedSearchParams?.embed === "1";
 
   if (!chatbot) {
     return (
@@ -32,13 +35,18 @@ export default async function ChatPage({ params }) {
     );
   }
 
-  const theme = { ...DEFAULT_THEME, ...chatbot.theme, logoUrl: chatbot.logoUrl };
+  const theme = {
+    ...DEFAULT_THEME,
+    ...chatbot.theme,
+    logoUrl: chatbot.logoUrl,
+  };
 
   return (
     <ChatWidget
       chatbotId={chatbot.chatbotId}
       title={chatbot.name}
       theme={theme}
+      embedded={embedded}
     />
   );
 }

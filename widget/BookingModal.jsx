@@ -4,8 +4,12 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import DateRangeCalendar from "@/components/Daterangecalendar";
 
+const MAX_GUESTS = 5;
+
 async function fetchProperties(chatbotId) {
-  const res = await fetch(`/api/properties?chatbotId=${encodeURIComponent(chatbotId)}`);
+  const res = await fetch(
+    `/api/properties?chatbotId=${encodeURIComponent(chatbotId)}`,
+  );
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Failed to load hotels.");
   return data.properties; // [{ propertyId, name, address }]
@@ -17,18 +21,25 @@ function formatDisplay(iso) {
   return `${Number(m)}/${Number(d)}/${y}`;
 }
 
-export default function BookingModal({ open, onClose, chatbotId, onSearch, theme }) {
+export default function BookingModal({
+  open,
+  onClose,
+  chatbotId,
+  onSearch,
+  theme,
+}) {
   const [propertyId, setPropertyId] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [adults, setAdults] = useState("");
+  const [guestError, setGuestError] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
 
   const { data: properties = [], isLoading: propertiesLoading } = useQuery({
     queryKey: ["chatbot-properties", chatbotId],
     queryFn: () => fetchProperties(chatbotId),
-    enabled: open && !!chatbotId,
+    enabled: !!chatbotId,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -45,6 +56,7 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
       setCheckIn("");
       setCheckOut("");
       setAdults("");
+      setGuestError("");
       setShowCalendar(false);
       if (properties.length !== 1) setPropertyId("");
     }
@@ -54,13 +66,37 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
   if (!open) return null;
 
   const needsDestination = properties.length > 1;
+
+  function handleAdultsChange(value) {
+  setAdults(value);
+  if (!value) {
+    setGuestError("");
+    return;
+  }
+  const n = Number(value);
+  if (!Number.isInteger(n)) {
+    setGuestError("Please enter a valid guest number.");
+  } else if (n > MAX_GUESTS) {
+    setGuestError(`Please enter ${MAX_GUESTS} guests or fewer.`);
+  } else if (n < 1) {
+    setGuestError("Please enter at least 1 guest.");
+  } else {
+    setGuestError("");
+  }
+}
+
+const guestsValid =
+  adults !== "" &&
+  Number.isInteger(Number(adults)) &&
+  Number(adults) >= 1 &&
+  Number(adults) <= MAX_GUESTS;
+
   const isComplete =
     (!needsDestination || propertyId) &&
     checkIn &&
     checkOut &&
     checkOut > checkIn && // belt-and-suspenders; the calendar already enforces this
-    adults &&
-    Number(adults) > 0;
+    guestsValid;
 
   async function handleSearch() {
     if (!isComplete || isSearching) return;
@@ -93,10 +129,12 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
       />
 
       <div
-        className="absolute z-20 bg-white shadow-xl p-4
+        className="absolute
+left-0
+mt-2 z-20 bg-white shadow-2xl p-4
           inset-x-0 bottom-0 rounded-t-2xl border-t border-slate-200
-          sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2
-          sm:w-[320px] sm:rounded-2xl sm:border sm:border-slate-200"
+          inset-x-auto bottom-auto left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+          w-[320px] rounded-2xl border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
@@ -109,7 +147,15 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
             className="w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 transition-colors cursor-pointer"
             style={{ background: "none", border: "none" }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
@@ -139,7 +185,9 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
           <div className="flex flex-col gap-2.5">
             {needsDestination && (
               <div>
-                <label className="text-[11px] font-medium text-slate-500 mb-1 block">Destination</label>
+                <label className="text-[11px] font-medium text-slate-500 mb-1 block">
+                  Destination
+                </label>
                 <select
                   value={propertyId}
                   onChange={(e) => setPropertyId(e.target.value)}
@@ -159,7 +207,9 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
             )}
 
             <div>
-              <label className="text-[11px] font-medium text-slate-500 mb-1 block">Dates</label>
+              <label className="text-[11px] font-medium text-slate-500 mb-1 block">
+                Dates
+              </label>
               <button
                 type="button"
                 onClick={() => setShowCalendar(true)}
@@ -173,16 +223,26 @@ export default function BookingModal({ open, onClose, chatbotId, onSearch, theme
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-slate-500 mb-1 block">Guests</label>
+              <label className="text-[11px] font-medium text-slate-500 mb-1 block">
+                Guests
+              </label>
               <input
                 type="number"
                 min={1}
-                max={10}
+                max={MAX_GUESTS}
                 value={adults}
-                onChange={(e) => setAdults(e.target.value)}
+                onChange={(e) => handleAdultsChange(e.target.value)}
                 placeholder="Number of adults"
-                className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-[13px] text-slate-800 outline-none focus:border-blue-500"
+                aria-invalid={!!guestError}
+                className={`w-full border rounded-lg px-2.5 py-2 text-[13px] text-slate-800 outline-none transition-colors ${
+                  guestError
+                    ? "border-red-400 focus:border-red-500"
+                    : "border-slate-200 focus:border-blue-500"
+                }`}
               />
+              {guestError && (
+                <p className="text-[11px] text-red-500 mt-1">{guestError}</p>
+              )}
             </div>
 
             <button
