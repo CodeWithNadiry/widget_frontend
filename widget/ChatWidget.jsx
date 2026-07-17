@@ -13,32 +13,23 @@ const DEFAULT_THEME = {
   headerTextColor: "#ffffff",
 };
 
-function useChatSize() {
-  const getSize = () => {
-    if (typeof window === "undefined")
-      return { width: "380px", height: "560px", bottom: "24px", right: "24px" };
-    const w = window.innerWidth;
-    if (w < 640)
-      return {
-        width: "calc(100vw - 24px)",
-        height: "70vh",
-        bottom: "12px",
-        right: "12px",
-      };
-    if (w < 1024)
-      return { width: "340px", height: "480px", bottom: "20px", right: "20px" };
-    return { width: "380px", height: "560px", bottom: "24px", right: "24px" };
-  };
+// Only used to decide whether to show the expand button / apply rounded
+// corners. The embedded panel/bubble now always fills 100% of whatever box
+// the host page's iframe currently is — sizing/position is the loader
+// script's job, not this component's.
+function useIsMobile() {
+  const getMobile = () =>
+    typeof window === "undefined" ? false : window.innerWidth < 640;
 
-  const [size, setSize] = useState(getSize);
+  const [isMobile, setIsMobile] = useState(getMobile);
 
   useEffect(() => {
-    const handler = () => setSize(getSize());
+    const handler = () => setIsMobile(getMobile());
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  return size;
+  return isMobile;
 }
 
 function Avatar({ theme, size = 24 }) {
@@ -83,25 +74,27 @@ export default function ChatWidget({
   const [interactionStarted, setInteractionStarted] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const bottomRef = useRef(null);
+  const isMobile = useIsMobile();
 
-  console.log('showing')
+  // Mobile never gets the expand button — force it back off if the
+  // viewport crosses into mobile width while expanded.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (isMobile && isExpanded) setIsExpanded(false);
+  }, [isMobile, isExpanded]);
+
+  // Tell the loader script (widget.js) which iframe size to switch to.
+  // "closed" -> tiny bubble box, "open" -> standard panel box,
+  // "expanded" -> larger panel box (desktop only).
   useEffect(() => {
     if (!embedded) return;
-
-    window.parent.postMessage(
-      {
-        source: "hotelbot",
-        type: isOpen ? "open" : "close",
-      },
-      "*",
-    );
-  }, [isOpen, embedded]);
+    let type = "close";
+    if (isOpen) type = isExpanded ? "expand" : "open";
+    window.parent.postMessage({ source: "hotelbot", type }, "*");
+  }, [isOpen, isExpanded, embedded]);
 
   const { messages, sendMessage, sendAction, searchOffers, isLoading, error } =
     useChat(chatbotId);
-  const size = useChatSize();
-
-  const isMobile = size.mobile;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -166,281 +159,218 @@ export default function ChatWidget({
     lastMessage?.role === "assistant" &&
     lastMessage.reply?.type === "welcome";
 
-  const panelWidth = isExpanded && !isMobile ? "min(680px, 90vw)" : size.width;
-  const panelHeight =
-    isExpanded && !isMobile ? "min(720px, 85vh)" : size.height;
+  const chatBody = (
+    <>
+      {/* ── Header ── */}
+      <div
+        className="px-4 py-3 flex items-center justify-between shrink-0"
+        style={{ backgroundColor: theme.headerBg }}
+      >
+        <div className="flex items-center gap-3">
+          <Avatar theme={theme} size={32} />
+          <div>
+            <p
+              className="text-sm  lg:text-md font-semibold leading-tight"
+              style={{ color: theme.headerTextColor }}
+            >
+              {title}
+            </p>
+          </div>
+        </div>
 
-  return (
-    <div
-      className={embedded ? "fixed z-50" : "overflow-hidden"}
-      style={
-        embedded
-          ? {
-              bottom: size.bottom,
-              right: size.right,
-            }
-          : {
-              width: "100%",
-              height: "100dvh",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "stretch",
-              background: theme.chatbg,
-            }
-      }
-    >
-      {(!embedded || isOpen) && (
-        <div
-          className="flex flex-col bg-white sm:bg-slate-50 sm:border
-sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
-          style={
-            embedded
-              ? {
-                  width: panelWidth,
-                  height: panelHeight,
-                  position: "fixed",
-                  bottom: `calc(${size.bottom} + 64px)`,
-                  right: size.right,
-                }
-              : {
-                  flex: 1,
-                  width: "100%",
-                  maxWidth: "900px",
-                  height: "100dvh",
-                  maxHeight: "100dvh",
-                  display: "flex",
-                  flexDirection: "column",
-                  background: "#fff",
-                  boxShadow: "none",
-                }
-          }
-        >
-          {/* ── Header — shrink-0 keeps it pinned, never pushed off by content ── */}
-          <div
-            className="px-4 py-3 flex items-center justify-between shrink-0"
-            style={{ backgroundColor: theme.headerBg }}
-          >
-            <div className="flex items-center gap-3">
-              <Avatar theme={theme} size={32} />
-              <div>
-                <p
-                  className="text-sm  lg:text-md font-semibold leading-tight"
-                  style={{ color: theme.headerTextColor }}
-                >
-                  {title}
-                </p>
+        <div className="flex items-center gap-1">
+          {embedded && !isMobile && (
+            <button
+              onClick={() => setIsExpanded((v) => !v)}
+              aria-label={isExpanded ? "Shrink" : "Expand"}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              style={{
+                background: "none",
+                border: "none",
+                color: theme.headerTextColor,
+                opacity: 0.7,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                {isExpanded ? (
+                  <>
+                    <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                    <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                    <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                    <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M15 3h6v6" />
+                    <path d="M9 21H3v-6" />
+                    <path d="M21 3l-7 7" />
+                    <path d="M3 21l7-7" />
+                  </>
+                )}
+              </svg>
+            </button>
+          )}
+          {embedded && (
+            <button
+              onClick={() => setIsOpen(false)}
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              style={{
+                background: "none",
+                border: "none",
+                color: theme.headerTextColor,
+                opacity: 0.7,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
+              aria-label="Close"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Messages ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
+        <div className="mx-4 my-3 flex flex-col gap-3 ">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex ${
+                msg.role === "user" ? "justify-end" : "justify-start"
+              }`}
+            >
+              {msg.role === "assistant" && (
+                <div className="mr-2 mt-1">
+                  <Avatar theme={theme} size={24} />
+                </div>
+              )}
+              <div
+                className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[14px] ${
+                  msg.role === "user"
+                    ? "text-white rounded-br-none leading-snug"
+                    : "border border-slate-200 text-slate-700 rounded-bl-none shadow-sm"
+                }`}
+                style={{
+                  backgroundColor:
+                    msg.role === "user" ? theme.primaryColor : theme.aiBubbleBg,
+                }}
+                dir="auto"
+              >
+                {msg.role === "user" ? (
+                  <span>{msg.text}</span>
+                ) : (
+                  <AssistantReply
+                    reply={msg.reply}
+                    onOfferPick={handleOfferPick}
+                    onHotelPick={handleHotelPick}
+                    theme={theme}
+                  />
+                )}
               </div>
             </div>
+          ))}
 
-            <div className="flex items-center gap-1">
-              {embedded && !isMobile && (
-                <button
-                  onClick={() => setIsExpanded((v) => !v)}
-                  aria-label={isExpanded ? "Shrink" : "Expand"}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: theme.headerTextColor,
-                    opacity: 0.7,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
-                    {isExpanded ? (
-                      <>
-                        <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-                        <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-                        <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-                        <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-                      </>
-                    ) : (
-                      <>
-                        <path d="M15 3h6v6" />
-                        <path d="M9 21H3v-6" />
-                        <path d="M21 3l-7 7" />
-                        <path d="M3 21l7-7" />
-                      </>
-                    )}
-                  </svg>
-                </button>
-              )}
-              {embedded && (
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: theme.headerTextColor,
-                    opacity: 0.7,
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.7)}
-                  aria-label="Close"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  >
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
+          {showWelcomeButtons && (
+            <div className="px-4 flex gap-2">
+              <button
+                onClick={handleBookAStay}
+                className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
+                style={{ backgroundColor: theme.primaryColor }}
+              >
+                Book a Room
+              </button>
+              <button
+                onClick={handleAskQuestion}
+                className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+              >
+                Ask a Question
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* ── Messages — the ONLY part that scrolls. flex-1 + min-h-0 lets it
-               shrink inside the flex column, overflow-y-auto makes it scroll
-               internally instead of pushing header/footer out of view. ── */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] scrollbar-none">
-            <div className="mx-4 my-3 flex flex-col gap-3 ">
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  {msg.role === "assistant" && (
-                    <div className="mr-2 mt-1">
-                      <Avatar theme={theme} size={24} />
-                    </div>
-                  )}
-                  <div
-                    className={`max-w-[78%] px-3.5 py-2.5 rounded-2xl text-[14px] ${
-                      msg.role === "user"
-                        ? "text-white rounded-br-none leading-snug"
-                        : "border border-slate-200 text-slate-700 rounded-bl-none shadow-sm"
-                    }`}
-                    style={{
-                      backgroundColor:
-                        msg.role === "user"
-                          ? theme.primaryColor
-                          : theme.aiBubbleBg,
-                    }}
-                    dir="auto"
-                  >
-                    {msg.role === "user" ? (
-                      <span>{msg.text}</span>
-                    ) : (
-                      <AssistantReply
-                        reply={msg.reply}
-                        onOfferPick={handleOfferPick}
-                        onHotelPick={handleHotelPick}
-                        theme={theme}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {showWelcomeButtons && (
-                <div className="px-4 flex gap-2">
-                  <button
-                    onClick={handleBookAStay}
-                    className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl text-white hover:opacity-90 transition-opacity cursor-pointer"
-                    style={{ backgroundColor: theme.primaryColor }}
-                  >
-                    Book a Room
-                  </button>
-                  <button
-                    onClick={handleAskQuestion}
-                    className="flex-1 text-[13px] font-medium px-3 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-                  >
-                    Ask a Question
-                  </button>
-                </div>
-              )}
-
-              {isLoading && (
-                <div className="flex justify-start items-center gap-2">
-                  <Avatar theme={theme} size={24} />
-                  <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex gap-1.5 items-center">
-                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
-                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
-                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <p className="text-xs text-red-500 text-center py-1">{error}</p>
-              )}
-              <div ref={bottomRef} />
+          {isLoading && (
+            <div className="flex justify-start items-center gap-2">
+              <Avatar theme={theme} size={24} />
+              <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl rounded-bl-none shadow-sm flex gap-1.5 items-center">
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:300ms]" />
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* ── Input — shrink-0 keeps it pinned to the bottom of the panel,
-               always visible, never scrolled away. ── */}
-          <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              disabled={isLoading}
-              className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition disabled:opacity-50"
-            />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className="text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
-              style={{ backgroundColor: theme.primaryColor }}
-            >
-              Send
-            </button>
-          </div>
-
-          <BookingModal
-            open={bookingModalOpen}
-            onClose={() => setBookingModalOpen(false)}
-            chatbotId={chatbotId}
-            onSearch={handleModalSearch}
-            theme={theme}
-          />
+          {error && (
+            <p className="text-xs text-red-500 text-center py-1">{error}</p>
+          )}
+          <div ref={bottomRef} />
         </div>
-      )}
+      </div>
 
-      {/* ── Floating bubble ── */}
-      {embedded && (
+      {/* ── Input ── */}
+      <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Type a message..."
+          disabled={isLoading}
+          className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition disabled:opacity-50"
+        />
         <button
-          onClick={() => setIsOpen((v) => !v)}
-          className="rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-all hover:opacity-90 hover:scale-105 overflow-hidden"
-          style={{
-            width: 52,
-            height: 52,
-            backgroundColor: theme.primaryColor,
-          }}
-          aria-label={isOpen ? "Close chat" : "Open chat"}
+          onClick={handleSend}
+          disabled={isLoading || !input.trim()}
+          className="text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
+          style={{ backgroundColor: theme.primaryColor }}
         >
-          {isOpen ? (
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          ) : theme.logoUrl ? (
+          Send
+        </button>
+      </div>
+
+      <BookingModal
+        open={bookingModalOpen}
+        onClose={() => setBookingModalOpen(false)}
+        chatbotId={chatbotId}
+        onSearch={handleModalSearch}
+        theme={theme}
+      />
+    </>
+  );
+
+  // ── Embedded rendering: the panel/bubble always fills 100% of whatever
+  // box the host page's iframe currently is. Sizing and position are
+  // entirely the loader script's job (widget.js) — this component never
+  // computes its own offsets, which is what was causing the clipping. ──
+  if (embedded) {
+    if (!isOpen) {
+      return (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="w-full h-full rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-transform hover:scale-105 overflow-hidden"
+          style={{ backgroundColor: theme.primaryColor }}
+          aria-label="Open chat"
+        >
+          {theme.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={theme.logoUrl}
@@ -449,8 +379,8 @@ sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
             />
           ) : (
             <svg
-              width="22"
-              height="22"
+              width="45%"
+              height="45%"
               viewBox="0 0 24 24"
               fill="none"
               stroke="white"
@@ -462,7 +392,50 @@ sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
             </svg>
           )}
         </button>
-      )}
+      );
+    }
+
+    return (
+      <div
+        className={`flex flex-col bg-white w-full h-full overflow-hidden shadow-xl ${
+          isMobile ? "" : "rounded-2xl border border-slate-200"
+        }`}
+      >
+        {chatBody}
+      </div>
+    );
+  }
+
+  // ── Standalone (non-embedded) rendering — unchanged. ──
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        width: "100%",
+        height: "100dvh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "stretch",
+        background: theme.chatbg,
+      }}
+    >
+      <div
+        className="flex flex-col bg-white sm:bg-slate-50 sm:border
+sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
+        style={{
+          flex: 1,
+          width: "100%",
+          maxWidth: "900px",
+          height: "100dvh",
+          maxHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
+          background: "#fff",
+          boxShadow: "none",
+        }}
+      >
+        {chatBody}
+      </div>
     </div>
   );
 }
