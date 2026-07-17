@@ -33,8 +33,6 @@
 
   document.body.appendChild(iframe);
 
-  // Tracks the last state we were told to show, so a window resize can
-  // reapply the right layout (e.g. going from expanded-desktop to mobile).
   let currentState = "closed"; // "closed" | "open" | "expanded"
 
   function resizeWidget(state) {
@@ -51,11 +49,13 @@
     }
 
     if (mobile) {
-      iframe.style.width = "100vw";
-      iframe.style.height = "100dvh";
-      iframe.style.bottom = "0";
-      iframe.style.right = "0";
-      iframe.style.borderRadius = "0";
+      // Leaves a visible margin around the panel instead of covering the
+      // whole screen, so the site underneath is still visible.
+      iframe.style.width = "calc(100vw - 24px)";
+      iframe.style.height = "calc(100dvh - 96px)";
+      iframe.style.bottom = "12px";
+      iframe.style.right = "12px";
+      iframe.style.borderRadius = "16px";
       return;
     }
 
@@ -63,8 +63,9 @@
       iframe.style.width = "min(680px, 90vw)";
       iframe.style.height = "min(720px, 85vh)";
     } else {
-      iframe.style.width = "400px";
-      iframe.style.height = "600px";
+      // Slightly smaller default than before (was 400x600).
+      iframe.style.width = "380px";
+      iframe.style.height = "560px";
     }
     iframe.style.bottom = "24px";
     iframe.style.right = "24px";

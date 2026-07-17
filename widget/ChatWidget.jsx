@@ -13,10 +13,6 @@ const DEFAULT_THEME = {
   headerTextColor: "#ffffff",
 };
 
-// Only used to decide whether to show the expand button / apply rounded
-// corners. The embedded panel/bubble now always fills 100% of whatever box
-// the host page's iframe currently is — sizing/position is the loader
-// script's job, not this component's.
 function useIsMobile() {
   const getMobile = () =>
     typeof window === "undefined" ? false : window.innerWidth < 640;
@@ -73,25 +69,34 @@ export default function ChatWidget({
   const [input, setInput] = useState("");
   const [interactionStarted, setInteractionStarted] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  // Drives the fade+scale-in effect on the panel/bubble content whenever
+  // isOpen flips — separate from the iframe's own box-resize transition
+  // (handled in widget.js), so opening feels like a deliberate reveal
+  // rather than a container just resizing.
+  const [entered, setEntered] = useState(false);
   const bottomRef = useRef(null);
   const isMobile = useIsMobile();
 
-  // Mobile never gets the expand button — force it back off if the
-  // viewport crosses into mobile width while expanded.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isMobile && isExpanded) setIsExpanded(false);
   }, [isMobile, isExpanded]);
 
-  // Tell the loader script (widget.js) which iframe size to switch to.
-  // "closed" -> tiny bubble box, "open" -> standard panel box,
-  // "expanded" -> larger panel box (desktop only).
   useEffect(() => {
     if (!embedded) return;
     let type = "close";
     if (isOpen) type = isExpanded ? "expand" : "open";
     window.parent.postMessage({ source: "hotelbot", type }, "*");
   }, [isOpen, isExpanded, embedded]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    if (isOpen) {
+      setEntered(false);
+      const t = setTimeout(() => setEntered(true), 20);
+      return () => clearTimeout(t);
+    }
+    setEntered(false);
+  }, [isOpen, embedded]);
 
   const { messages, sendMessage, sendAction, searchOffers, isLoading, error } =
     useChat(chatbotId);
@@ -357,16 +362,12 @@ export default function ChatWidget({
     </>
   );
 
-  // ── Embedded rendering: the panel/bubble always fills 100% of whatever
-  // box the host page's iframe currently is. Sizing and position are
-  // entirely the loader script's job (widget.js) — this component never
-  // computes its own offsets, which is what was causing the clipping. ──
   if (embedded) {
     if (!isOpen) {
       return (
         <button
           onClick={() => setIsOpen(true)}
-          className="w-full h-full rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-transform hover:scale-105 overflow-hidden"
+          className="w-full h-full rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-transform duration-150 hover:scale-105 active:scale-95 overflow-hidden"
           style={{ backgroundColor: theme.primaryColor }}
           aria-label="Open chat"
         >
@@ -397,8 +398,8 @@ export default function ChatWidget({
 
     return (
       <div
-        className={`flex flex-col bg-white w-full h-full overflow-hidden shadow-xl ${
-          isMobile ? "" : "rounded-2xl border border-slate-200"
+        className={`flex flex-col bg-white w-full h-full overflow-hidden shadow-xl rounded-2xl border border-slate-200 transition-all duration-200 ease-out ${
+          entered ? "opacity-100 scale-100" : "opacity-0 scale-95"
         }`}
       >
         {chatBody}
