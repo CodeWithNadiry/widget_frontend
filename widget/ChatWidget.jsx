@@ -88,6 +88,28 @@ function Avatar({ theme, size = 24 }) {
   );
 }
 
+// Animated equalizer-style bars shown while recording. Colored with the
+// widget's primaryColor so it fits whatever theme the hotel picked.
+function RecordingWaveform({ color }) {
+  const bars = [0, 1, 2, 3, 4];
+  return (
+    <div className="flex items-end gap-[3px] h-4 shrink-0">
+      {bars.map((i) => (
+        <span
+          key={i}
+          className="hotelbot-eq-bar inline-block rounded-full"
+          style={{
+            width: 3,
+            height: 14,
+            backgroundColor: color,
+            animationDelay: `${i * 0.12}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function ChatWidget({
   chatbotId,
   title = "Hotel Assistant",
@@ -112,6 +134,85 @@ export default function ChatWidget({
   const inputRef = useRef(null);
   const wasLoadingRef = useRef(false);
   const isMobile = useIsMobile(embedded);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  const recognitionRef = useRef(null);
+  const recordingIntervalRef = useRef(null);
+  // When the user hits "cancel" mid-recording we stop the recognition
+  // engine, but some browsers still fire one last onresult before onend
+  // actually lands — this flag makes sure that trailing result gets
+  // dropped instead of repopulating the input after a cancel.
+  const discardTranscriptRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSpeechSupported(false);
+      return;
+    }
+
+    setSpeechSupported(true);
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+      discardTranscriptRef.current = false;
+      setIsRecording(true);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onresult = (event) => {
+      if (discardTranscriptRef.current) return;
+
+      let transcript = "";
+
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      setInput(transcript);
+    };
+
+    recognitionRef.current = recognition;
+  }, []);
+
+  // Drives the recording timer shown in the waveform pill.
+  useEffect(() => {
+    if (isRecording) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRecordingSeconds(0);
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingSeconds((s) => s + 1);
+      }, 1000);
+    } else if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    return () => {
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    };
+  }, [isRecording]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -173,6 +274,27 @@ export default function ChatWidget({
       setBookingModalOpen(true);
     }
   }, [messages]);
+
+  function startRecording() {
+    setInput("");
+    recognitionRef.current?.start();
+  }
+
+  function stopRecording() {
+    recognitionRef.current?.stop();
+  }
+
+  function cancelRecording() {
+    discardTranscriptRef.current = true;
+    recognitionRef.current?.stop();
+    setInput("");
+  }
+
+  function formatRecordingTime(totalSeconds) {
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
 
   function handleSend() {
     if (!input.trim() || isLoading) return;
@@ -240,6 +362,24 @@ export default function ChatWidget({
 
   const chatBody = (
     <>
+      <style>{`
+        @keyframes hotelbot-eq {
+          0%, 100% { transform: scaleY(0.35); }
+          50% { transform: scaleY(1); }
+        }
+        .hotelbot-eq-bar {
+          animation: hotelbot-eq 0.9s ease-in-out infinite;
+          transform-origin: bottom;
+        }
+        @keyframes hotelbot-rec-fade-in {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .hotelbot-rec-pill {
+          animation: hotelbot-rec-fade-in 160ms ${EASE};
+        }
+      `}</style>
+
       {/* ── Header ── */}
       <div
         className="px-4 py-3 flex items-center justify-between shrink-0"
@@ -407,24 +547,135 @@ export default function ChatWidget({
       </div>
 
       {/* ── Input ── */}
-      <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0">
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message..."
-          disabled={isLoading}
-          className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition disabled:opacity-50"
-        />
-        <button
-          onClick={handleSend}
-          disabled={isLoading || !input.trim()}
-          className="text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer"
-          style={{ backgroundColor: theme.primaryColor }}
-        >
-          Send
-        </button>
+      <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0 items-center">
+        {isRecording ? (
+          <>
+            {/* Recording pill: replaces the text input in place so the
+                row never reflows — waveform + timer, with live transcript
+                fading in once speech recognition starts returning text. */}
+            <div
+              className="hotelbot-rec-pill flex-1 flex items-center gap-2.5 min-w-0 border border-red-200 bg-red-50 rounded-xl px-3.5 py-2"
+              aria-live="polite"
+            >
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+              </span>
+
+              <RecordingWaveform color={theme.primaryColor} />
+
+              <span className="text-xs font-semibold text-red-500 tabular-nums shrink-0">
+                {formatRecordingTime(recordingSeconds)}
+              </span>
+
+              {input.trim() ? (
+                <span
+                  className="text-[13px] text-slate-500 truncate min-w-0"
+                  dir="auto"
+                >
+                  {input}
+                </span>
+              ) : (
+                <span className="text-[13px] text-slate-400 truncate min-w-0">
+                  Listening...
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={cancelRecording}
+              aria-label="Cancel recording"
+              title="Cancel recording"
+              className="w-11 h-11 rounded-xl flex items-center justify-center border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={stopRecording}
+              aria-label="Stop recording and keep text"
+              title="Stop recording"
+              className="w-11 h-11 rounded-xl flex items-center justify-center bg-red-500 hover:bg-red-600 transition-colors cursor-pointer shrink-0"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </button>
+          </>
+        ) : (
+          <>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              disabled={isLoading}
+              className="flex-1 border border-slate-200 rounded-xl px-3.5 py-2 text-sm text-slate-800 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition disabled:opacity-50"
+            />
+            {speechSupported && (
+              <button
+                type="button"
+                onClick={startRecording}
+                disabled={isLoading}
+                className="w-11 h-11 rounded-xl flex items-center justify-center border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                title="Start recording"
+                aria-label="Start recording"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10a7 7 0 0 1-14 0" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </button>
+            )}
+
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !input.trim()}
+              className="text-white text-sm font-medium px-4 py-2 rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity cursor-pointer shrink-0"
+              style={{ backgroundColor: theme.primaryColor }}
+            >
+              Send
+            </button>
+          </>
+        )}
       </div>
 
       <BookingModal
@@ -516,18 +767,18 @@ export default function ChatWidget({
         height: "100dvh",
         display: "flex",
         justifyContent: "center",
-        alignItems: isMobile ? 'stretch': 'center',
+        alignItems: isMobile ? "stretch" : "center",
         background: theme.chatbg,
       }}
     >
       <div
-        className="flex flex-col bg-white sm:bg-slate-50 sm:border
-sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
+        className="flex flex-col bg-white sm:bg-slate-50 sm:border-2
+sm:border-amber-700 sm:rounded-xl overflow-hidden shadow-xl relative"
         style={{
           flex: 1,
           width: "100%",
           maxWidth: "900px",
-          height: isMobile ? '100dvh': '93dvh',
+          height: isMobile ? "100dvh" : "93dvh",
           maxHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
