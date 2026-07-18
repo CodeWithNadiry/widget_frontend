@@ -116,7 +116,7 @@ export default function ChatWidget({
   theme = DEFAULT_THEME,
   embedded = false,
 }) {
-  const [isOpen, setIsOpen] = useState(!embedded);
+  const [isOpen, setIsOpen] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [input, setInput] = useState("");
   const [interactionStarted, setInteractionStarted] = useState(false);

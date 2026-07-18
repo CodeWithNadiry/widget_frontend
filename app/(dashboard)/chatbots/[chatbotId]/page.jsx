@@ -163,11 +163,11 @@ export default function ChatbotDetailPage({ params }) {
   return (
     <div className="max-w-xl flex flex-col gap-6">
       <Link
-              href="/chatbots"
-              className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
-            >
-              ← Back to chatbots
-            </Link>
+        href="/chatbots"
+        className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
+      >
+        ← Back to chatbots
+      </Link>
       <ChatbotHeader chatbot={chatbot} />
       {/* ── Chatbot settings ── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">

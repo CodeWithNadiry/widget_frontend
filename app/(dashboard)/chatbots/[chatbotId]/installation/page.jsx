@@ -5,8 +5,8 @@ import Link from "next/link";
 import ChatbotHeader from "@/components/chatbots/ChatbotHeader";
 import { useChatbot } from "@/hooks/useChatbots";
 
-const WIDGET_URL =
-  "https://widget-frontend-three.vercel.app/widget.js";
+const WIDGET_ORIGIN = "https://widget-frontend-three.vercel.app";
+const WIDGET_URL = `${WIDGET_ORIGIN}/widget.js`;
 
 export default function InstallationPage({ params }) {
   const { chatbotId } = use(params);
@@ -17,6 +17,12 @@ export default function InstallationPage({ params }) {
 
   const [activeTab, setActiveTab] = useState("html");
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const chatLink = useMemo(
+    () => `${WIDGET_ORIGIN}/chat/${chatbot?.slug ?? ""}`,
+    [chatbot]
+  );
 
   const htmlCode = useMemo(
   () => `<script
@@ -73,6 +79,17 @@ async>
     } catch {}
   }
 
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(chatLink);
+      setLinkCopied(true);
+
+      setTimeout(() => {
+        setLinkCopied(false);
+      }, 2000);
+    } catch {}
+  }
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto">
@@ -108,6 +125,61 @@ async>
           </span>{" "}
           on any website in under a minute.
         </p>
+
+      </div>
+
+      {/* CHATBOT LINK */}
+
+      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+
+        <div className="px-6 py-5 border-b border-slate-200">
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+            Chatbot Link
+          </p>
+
+          <h3 className="text-lg font-semibold text-slate-900 mt-1">
+            Share a direct link
+          </h3>
+
+          <p className="text-slate-500 mt-1 text-sm">
+            No embedding required. Share this link with anyone who wants to
+            try{" "}
+            <span className="font-medium text-slate-700">
+              {chatbot.name}
+            </span>{" "}
+            directly, like a client or teammate.
+          </p>
+
+        </div>
+
+        <div className="p-6">
+
+          <div className="flex items-center gap-3">
+
+            <input
+              readOnly
+              value={chatLink}
+              onFocus={(e) => e.target.select()}
+              className="flex-1 h-11 rounded-lg border border-slate-300 bg-slate-50 px-4 text-sm text-slate-700 font-mono"
+            />
+
+            <button
+              onClick={handleCopyLink}
+              className={`h-11 px-5 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap
+
+              ${
+                linkCopied
+                  ? "bg-emerald-600 text-white"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {linkCopied ? "Copied ✓" : "Copy link"}
+            </button>
+
+          </div>
+
+        </div>
 
       </div>
 
