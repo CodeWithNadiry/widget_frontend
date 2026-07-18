@@ -448,7 +448,7 @@ export default function ChatWidget({
             }
             .hotelbot-bubble {
               animation: hotelbot-idle-pulse 5.5s ease-in-out infinite;
-              transition: transform 200ms ${EASE};
+              transition: transform 100ms ${EASE};
             }
             .hotelbot-bubble:hover {
               animation-play-state: paused;
@@ -516,7 +516,7 @@ export default function ChatWidget({
         height: "100dvh",
         display: "flex",
         justifyContent: "center",
-        alignItems: "stretch",
+        alignItems: isMobile ? 'stretch': 'center',
         background: theme.chatbg,
       }}
     >
@@ -527,7 +527,7 @@ sm:border-slate-200 sm:rounded-xl overflow-hidden shadow-xl relative"
           flex: 1,
           width: "100%",
           maxWidth: "900px",
-          height: "100dvh",
+          height: isMobile ? '100dvh': '93dvh',
           maxHeight: "100dvh",
           display: "flex",
           flexDirection: "column",
