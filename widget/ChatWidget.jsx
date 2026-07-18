@@ -222,7 +222,7 @@ export default function ChatWidget({
         </div>
 
         <div className="flex items-center gap-1">
-          {embedded && !isMobile && (
+          {embedded && (
             <button
               onClick={() => setIsExpanded((v) => !v)}
               aria-label={isExpanded ? "Shrink" : "Expand"}
