@@ -13,6 +13,13 @@ const DEFAULT_THEME = {
   headerTextColor: "#ffffff",
 };
 
+// Keep these in sync with widget.js's iframe transition timing so the
+// panel's own fade/scale animation and the parent iframe's resize
+// animation land together instead of looking like two separate motions.
+const OPEN_DURATION = 240; // ms
+const CLOSE_DURATION = 240; // ms
+const EASE = "cubic-bezier(.22,.61,.36,1)";
+
 function useIsMobile() {
   const getMobile = () =>
     typeof window === "undefined" ? false : window.innerWidth < 640;
@@ -69,34 +76,46 @@ export default function ChatWidget({
   const [input, setInput] = useState("");
   const [interactionStarted, setInteractionStarted] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
-  // Drives the fade+scale-in effect on the panel/bubble content whenever
-  // isOpen flips — separate from the iframe's own box-resize transition
-  // (handled in widget.js), so opening feels like a deliberate reveal
-  // rather than a container just resizing.
+  // Drives the fade+translate+scale effect on the panel content whenever
+  // it opens or closes — separate from the iframe's own box-resize
+  // transition (handled in widget.js), so opening/closing feels like a
+  // deliberate reveal/dismissal rather than a container just resizing.
   const [entered, setEntered] = useState(false);
+  // True for the brief window between "user clicked close" and "panel
+  // actually unmounts" — lets the content play its closing animation
+  // before we tear the panel down and shrink the iframe back to a bubble.
+  const [isClosing, setIsClosing] = useState(false);
   const bottomRef = useRef(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isMobile && isExpanded) setIsExpanded(false);
   }, [isMobile, isExpanded]);
 
   useEffect(() => {
     if (!embedded) return;
+    // While closing, tell the parent right away so the iframe shrink
+    // animation and the panel's fade-out animation run in sync instead
+    // of the iframe snapping shut only after the panel has vanished.
+    if (isClosing) {
+      window.parent.postMessage({ source: "hotelbot", type: "close" }, "*");
+      return;
+    }
     let type = "close";
     if (isOpen) type = isExpanded ? "expand" : "open";
     window.parent.postMessage({ source: "hotelbot", type }, "*");
-  }, [isOpen, isExpanded, embedded]);
+  }, [isOpen, isExpanded, embedded, isClosing]);
 
   useEffect(() => {
     if (!embedded) return;
-    if (isOpen) {
+    if (isOpen && !isClosing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEntered(false);
       const t = setTimeout(() => setEntered(true), 20);
       return () => clearTimeout(t);
     }
-    setEntered(false);
-  }, [isOpen, embedded]);
+  }, [isOpen, embedded, isClosing]);
 
   const { messages, sendMessage, sendAction, searchOffers, isLoading, error } =
     useChat(chatbotId);
@@ -158,11 +177,30 @@ export default function ChatWidget({
     sendMessage(name);
   }
 
+  function handleClose() {
+    if (!embedded) {
+      setIsOpen(false);
+      return;
+    }
+    // Play the fade/scale/translate-down closing animation first, then
+    // unmount once it's finished so the panel never just disappears.
+    setIsClosing(true);
+    setEntered(false);
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+    }, CLOSE_DURATION);
+  }
+
   const lastMessage = messages[messages.length - 1];
   const showWelcomeButtons =
     !interactionStarted &&
     lastMessage?.role === "assistant" &&
     lastMessage.reply?.type === "welcome";
+
+  const panelShadow = isExpanded
+    ? "0 26px 64px -14px rgba(15,23,42,.38), 0 10px 28px -10px rgba(15,23,42,.24)"
+    : "0 18px 48px -14px rgba(15,23,42,.26), 0 6px 18px -8px rgba(15,23,42,.16)";
 
   const chatBody = (
     <>
@@ -227,7 +265,7 @@ export default function ChatWidget({
           )}
           {embedded && (
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={handleClose}
               className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               style={{
                 background: "none",
@@ -365,42 +403,67 @@ export default function ChatWidget({
   if (embedded) {
     if (!isOpen) {
       return (
-        <button
-          onClick={() => setIsOpen(true)}
-          className="w-full h-full rounded-full flex items-center justify-center shadow-lg cursor-pointer transition-transform duration-150 hover:scale-105 active:scale-95 overflow-hidden"
-          style={{ backgroundColor: theme.primaryColor }}
-          aria-label="Open chat"
-        >
-          {theme.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={theme.logoUrl}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <svg
-              width="45%"
-              height="45%"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          )}
-        </button>
+        <>
+          <style>{`
+            @keyframes hotelbot-idle-pulse {
+              0%, 90%, 100% { transform: scale(1); }
+              95% { transform: scale(1.04); }
+            }
+            .hotelbot-bubble {
+              animation: hotelbot-idle-pulse 5.5s ease-in-out infinite;
+              transition: transform 200ms ${EASE};
+            }
+            .hotelbot-bubble:hover {
+              animation-play-state: paused;
+              transform: scale(1.08);
+            }
+            .hotelbot-bubble:active {
+              transform: scale(0.95);
+            }
+          `}</style>
+          <button
+            onClick={() => setIsOpen(true)}
+            className="hotelbot-bubble w-full h-full rounded-full flex items-center justify-center shadow-lg cursor-pointer overflow-hidden"
+            style={{ backgroundColor: theme.primaryColor }}
+            aria-label="Open chat"
+          >
+            {theme.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={theme.logoUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <svg
+                width="45%"
+                height="45%"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            )}
+          </button>
+        </>
       );
     }
 
     return (
       <div
-        className={`flex flex-col bg-white w-full h-full overflow-hidden shadow-xl rounded-2xl border border-slate-200 transition-all duration-200 ease-out ${
-          entered ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        className={`flex flex-col bg-white w-full h-full overflow-hidden rounded-[18px] border border-slate-200 transition-all ease-[cubic-bezier(.22,.61,.36,1)] ${
+          entered
+            ? "opacity-100 scale-100 translate-y-0"
+            : "opacity-0 scale-[0.96] translate-y-3"
         }`}
+        style={{
+          transitionDuration: `${entered ? OPEN_DURATION : CLOSE_DURATION}ms`,
+          boxShadow: panelShadow,
+        }}
       >
         {chatBody}
       </div>

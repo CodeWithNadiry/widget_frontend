@@ -17,6 +17,17 @@
 
   iframe.id = "hotelbot-widget";
 
+  // Shadow states kept separate from size states so the shadow can ease
+  // in/out at the same time as the width/height/border-radius change —
+  // this is what makes the resize read as "premium" rather than a flat
+  // instant snap.
+  const SHADOWS = {
+    closed: "0 8px 24px rgba(0,0,0,.18)",
+    open: "0 20px 50px -12px rgba(15,23,42,.28), 0 8px 20px -8px rgba(15,23,42,.18)",
+    expanded:
+      "0 26px 64px -12px rgba(15,23,42,.38), 0 10px 28px -8px rgba(15,23,42,.24)",
+  };
+
   iframe.style.cssText = [
     "position:fixed",
     "bottom:24px",
@@ -28,15 +39,17 @@
     "overflow:hidden",
     "border-radius:9999px",
     "z-index:999999",
-    "transition:width .25s ease,height .25s ease,bottom .25s ease,right .25s ease,border-radius .2s ease",
+    "transition:width .24s cubic-bezier(.22,.61,.36,1),height .24s cubic-bezier(.22,.61,.36,1),bottom .24s cubic-bezier(.22,.61,.36,1),right .24s cubic-bezier(.22,.61,.36,1),border-radius .24s cubic-bezier(.22,.61,.36,1),box-shadow .24s cubic-bezier(.22,.61,.36,1)",
+    "box-shadow:" + SHADOWS.closed,
   ].join(";");
 
   document.body.appendChild(iframe);
 
-  let currentState = "closed"; // "closed" | "open" | "expanded"
+  let currentState = "closed";
 
   function resizeWidget(state) {
     currentState = state;
+
     const mobile = window.innerWidth < 640;
 
     if (state === "closed") {
@@ -45,31 +58,37 @@
       iframe.style.bottom = "24px";
       iframe.style.right = "24px";
       iframe.style.borderRadius = "9999px";
+      iframe.style.boxShadow = SHADOWS.closed;
       return;
     }
 
     if (mobile) {
-      // Leaves a visible margin around the panel instead of covering the
-      // whole screen, so the site underneath is still visible.
+      // Deliberately short of the full viewport (never 100vh/100dvh) so
+      // a strip of the page stays visible behind the widget — the user
+      // should always feel like they're still on the site, not inside
+      // a takeover screen.
       iframe.style.width = "calc(100vw - 24px)";
-      iframe.style.height = "calc(100dvh - 96px)";
+      iframe.style.height = "min(87dvh, 720px)";
       iframe.style.bottom = "12px";
       iframe.style.right = "12px";
-      iframe.style.borderRadius = "16px";
+      iframe.style.borderRadius = "18px";
+      iframe.style.boxShadow = SHADOWS.open;
       return;
     }
 
     if (state === "expanded") {
-      iframe.style.width = "min(680px, 90vw)";
-      iframe.style.height = "min(720px, 85vh)";
+      iframe.style.width = "min(520px, calc(100vw - 32px))";
+      iframe.style.height = "min(700px, calc(100vh - 32px))";
+      iframe.style.boxShadow = SHADOWS.expanded;
     } else {
-      // Slightly smaller default than before (was 400x600).
       iframe.style.width = "380px";
       iframe.style.height = "560px";
+      iframe.style.boxShadow = SHADOWS.open;
     }
+
     iframe.style.bottom = "24px";
     iframe.style.right = "24px";
-    iframe.style.borderRadius = "16px";
+    iframe.style.borderRadius = "18px";
   }
 
   window.addEventListener("message", function (event) {
@@ -80,13 +99,17 @@
       case "open":
         resizeWidget("open");
         break;
+
       case "expand":
         resizeWidget("expanded");
         break;
+
+      case "collapse":
+        resizeWidget("open");
+        break;
+
       case "close":
         resizeWidget("closed");
-        break;
-      default:
         break;
     }
   });
