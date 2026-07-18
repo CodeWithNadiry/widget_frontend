@@ -12,8 +12,18 @@
 
   const iframe = document.createElement("iframe");
 
+  // The iframe's own box is deliberately narrower than a phone screen
+  // even on desktop (380-520px), so the widget's own React code can't
+  // reliably tell "mobile" from its own width — it has to be told the
+  // real host-page viewport width instead. We seed it via query param
+  // for first paint, then keep it live via postMessage below.
+  const isRealMobile = () => window.innerWidth < 640;
+
   iframe.src =
-    "https://widget-frontend-three.vercel.app/chat/" + slug + "?embed=1";
+    "https://widget-frontend-three.vercel.app/chat/" +
+    slug +
+    "?embed=1&mobile=" +
+    (isRealMobile() ? "1" : "0");
 
   iframe.id = "hotelbot-widget";
 
@@ -45,12 +55,25 @@
 
   document.body.appendChild(iframe);
 
+  function postViewport() {
+    iframe.contentWindow?.postMessage(
+      { source: "hotelbot-host", type: "viewport", mobile: isRealMobile() },
+      "*"
+    );
+  }
+
+  // The query param above only covers first paint. Once the widget's own
+  // React app has mounted and attached its message listener, push a live
+  // update too, in case the param was stale or the real window is resized
+  // later (e.g. rotating a tablet, or resizing a desktop browser).
+  iframe.addEventListener("load", postViewport);
+
   let currentState = "closed";
 
   function resizeWidget(state) {
     currentState = state;
 
-    const mobile = window.innerWidth < 640;
+    const mobile = isRealMobile();
 
     if (state === "closed") {
       iframe.style.width = "64px";
@@ -116,5 +139,6 @@
 
   window.addEventListener("resize", function () {
     resizeWidget(currentState);
+    postViewport();
   });
 })();

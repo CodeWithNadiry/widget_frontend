@@ -20,17 +20,40 @@ const OPEN_DURATION = 240; // ms
 const CLOSE_DURATION = 240; // ms
 const EASE = "cubic-bezier(.22,.61,.36,1)";
 
-function useIsMobile() {
-  const getMobile = () =>
-    typeof window === "undefined" ? false : window.innerWidth < 640;
+function useIsMobile(embedded) {
+  // Inside an embedded iframe, our own box is deliberately narrower than
+  // a phone screen even on desktop (380-520px) — so checking our own
+  // window.innerWidth here would call itself "mobile" all the time,
+  // regardless of the visitor's actual device. The host page (widget.js)
+  // knows the real viewport width, so when embedded we trust that instead:
+  // a query param for first paint, and postMessage for live updates.
+  const getInitial = () => {
+    if (typeof window === "undefined") return false;
+    if (embedded) {
+      return new URLSearchParams(window.location.search).get("mobile") === "1";
+    }
+    return window.innerWidth < 640;
+  };
 
-  const [isMobile, setIsMobile] = useState(getMobile);
+  const [isMobile, setIsMobile] = useState(getInitial);
 
   useEffect(() => {
-    const handler = () => setIsMobile(getMobile());
+    if (embedded) {
+      function handleMessage(event) {
+        if (
+          event.data?.source === "hotelbot-host" &&
+          event.data?.type === "viewport"
+        ) {
+          setIsMobile(!!event.data.mobile);
+        }
+      }
+      window.addEventListener("message", handleMessage);
+      return () => window.removeEventListener("message", handleMessage);
+    }
+    const handler = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
-  }, []);
+  }, [embedded]);
 
   return isMobile;
 }
@@ -86,7 +109,7 @@ export default function ChatWidget({
   // before we tear the panel down and shrink the iframe back to a bubble.
   const [isClosing, setIsClosing] = useState(false);
   const bottomRef = useRef(null);
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(embedded);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -222,7 +245,7 @@ export default function ChatWidget({
         </div>
 
         <div className="flex items-center gap-1">
-          {embedded && (
+          {embedded && !isMobile && (
             <button
               onClick={() => setIsExpanded((v) => !v)}
               aria-label={isExpanded ? "Shrink" : "Expand"}
