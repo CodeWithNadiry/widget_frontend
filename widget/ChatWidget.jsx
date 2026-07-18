@@ -114,7 +114,7 @@ export default function ChatWidget({
   chatbotId,
   title = "Hotel Assistant",
   theme = DEFAULT_THEME,
-  embedded = false,
+  embedded = true,
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
