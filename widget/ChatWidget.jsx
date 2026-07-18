@@ -109,6 +109,8 @@ export default function ChatWidget({
   // before we tear the panel down and shrink the iframe back to a bubble.
   const [isClosing, setIsClosing] = useState(false);
   const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+  const wasLoadingRef = useRef(false);
   const isMobile = useIsMobile(embedded);
 
   useEffect(() => {
@@ -146,6 +148,17 @@ export default function ChatWidget({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    // Only focus on the true->false transition (a reply just finished),
+    // not on every render where isLoading happens to be false — that
+    // would also fire on mount and steal focus before the user's asked
+    // for anything.
+    if (wasLoadingRef.current && !isLoading) {
+      inputRef.current?.focus();
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
     const hasUserMessage = messages.some((m) => m.role === "user");
@@ -396,6 +409,7 @@ export default function ChatWidget({
       {/* ── Input ── */}
       <div className="p-3 border-t border-slate-200 bg-white flex gap-2 shrink-0">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
