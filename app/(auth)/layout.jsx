@@ -83,7 +83,7 @@ export default function AuthLayout({ children }) {
         <div className="lg:hidden mb-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-lg">
-              🤖
+              <Image src={"/logo-mark.svg"} width={90} height={90} alt="logo" />
             </div>
             <span className="text-2xl font-bold text-slate-900">Hostmind</span>
           </div>
