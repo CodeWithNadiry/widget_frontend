@@ -48,6 +48,8 @@ export function useAssignProperty(chatbotId) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chatbots", chatbotId, "properties"] });
       qc.invalidateQueries({ queryKey: ["chatbots", chatbotId] });
+      // The properties list page shows counts/assignment per chatbot too.
+      qc.invalidateQueries({ queryKey: ["chatbots"] });
     },
   });
 }
@@ -62,6 +64,7 @@ export function useRemoveProperty(chatbotId) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["chatbots", chatbotId, "properties"] });
       qc.invalidateQueries({ queryKey: ["chatbots", chatbotId] });
+      qc.invalidateQueries({ queryKey: ["chatbots"] });
     },
   });
 }
@@ -97,16 +100,22 @@ export function useUploadChatbotLogo() {
       const formData = new FormData();
       formData.append("logo", file);
 
+      // This route lives on the PUBLIC chatbot router (chatbot.routes.js:
+      // router.post("/:chatbotId/logo", ...)) — no /admin prefix, no auth
+      // middleware. So no Authorization header needed here; the real bug
+      // was that admin.service.js's getChatbotById never returned logoUrl
+      // in its `attributes`, so a successful upload never showed up.
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/chatbot/${chatbotId}/logo`,
         { method: "POST", body: formData },
       );
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Upload failed.");
+        throw new Error(data.message || "Upload failed.");
       }
-      return res.json(); // { logoUrl }
+      return data; // { logoUrl }
     },
     onSuccess: (_data, { chatbotId }) => {
       qc.invalidateQueries({ queryKey: ["chatbots", chatbotId] });

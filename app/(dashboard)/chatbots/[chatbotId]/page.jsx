@@ -5,12 +5,10 @@ import Link from "next/link";
 import {
   useChatbot,
   useChatbotProperties,
-  useAssignProperty,
   useRemoveProperty,
   useUpdateChatbot,
   useUploadChatbotLogo,
 } from "@/hooks/useChatbots";
-import { useProperties } from "@/hooks/useProperties";
 import ColorField from "@/components/ColorField";
 import ChatbotHeader from "@/components/chatbots/ChatbotHeader";
 
@@ -55,9 +53,7 @@ export default function ChatbotDetailPage({ params }) {
 
   const { data: chatbotData, isLoading } = useChatbot(chatbotId);
   const { data: propsData } = useChatbotProperties(chatbotId);
-  const { data: allPropsData } = useProperties();
 
-  const { mutate: assignProperty } = useAssignProperty(chatbotId);
   const { mutate: removeProperty } = useRemoveProperty(chatbotId);
   const { mutate: updateChatbot, isPending: isSaving } =
     useUpdateChatbot(chatbotId);
@@ -73,17 +69,11 @@ export default function ChatbotDetailPage({ params }) {
     theme: DEFAULT_THEME,
   });
   const [saved, setSaved] = useState(false);
-  const [selectedPropertyId, setSelectedPropertyId] = useState("");
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
 
   const chatbot = chatbotData?.chatbot;
   const assignedProperties = propsData?.properties ?? [];
-  const allProperties = allPropsData?.properties ?? [];
-
-  const unassigned = allProperties.filter(
-    (p) => !assignedProperties.find((a) => a.propertyId === p.propertyId),
-  );
 
   const hasChanges =
     form.name !== (chatbot?.name ?? "") ||
@@ -295,7 +285,7 @@ export default function ChatbotDetailPage({ params }) {
         </div>
       </div>
 
-      {/* ── Assigned properties ── */}
+      {/* ── Assigned properties (read-only — assignment now happens from the property pages) ── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-900">
@@ -309,7 +299,7 @@ export default function ChatbotDetailPage({ params }) {
         </div>
 
         <div className="p-6 flex flex-col gap-4">
-          {assignedProperties.length > 0 && (
+          {assignedProperties.length > 0 ? (
             <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
               {assignedProperties.map((p) => (
                 <div
@@ -338,51 +328,16 @@ export default function ChatbotDetailPage({ params }) {
                 </div>
               ))}
             </div>
-          )}
-
-          {unassigned.length > 0 && (
-            <div className="flex gap-2">
-              <select
-                value={selectedPropertyId}
-                onChange={(e) => setSelectedPropertyId(e.target.value)}
-                className="flex-1 h-10 rounded-lg border border-slate-300 px-3.5 text-[15px] text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition bg-white"
-              >
-                <option value="">Select a property to assign…</option>
-                {unassigned.map((p) => (
-                  <option key={p.propertyId} value={p.propertyId}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => {
-                  if (!selectedPropertyId) return;
-                  assignProperty(selectedPropertyId, {
-                    onSuccess: () => setSelectedPropertyId(""),
-                  });
-                }}
-                className="h-10 px-4 bg-blue-600 text-white text-[15px] font-medium rounded-lg hover:bg-blue-700 cursor-pointer transition-colors shadow-sm"
-              >
-                Assign
-              </button>
-            </div>
-          )}
-
-          {unassigned.length === 0 && assignedProperties.length > 0 && (
+          ) : (
             <p className="text-sm text-slate-400">
-              All your properties are assigned to this chatbot.
-            </p>
-          )}
-
-          {unassigned.length === 0 && assignedProperties.length === 0 && (
-            <p className="text-sm text-slate-400">
-              No properties available.{" "}
+              No properties assigned yet.{" "}
               <Link
                 href="/properties/new"
                 className="text-blue-600 hover:underline"
               >
-                Add a property first.
-              </Link>
+                Create a property
+              </Link>{" "}
+              and assign it to this chatbot from there.
             </p>
           )}
         </div>

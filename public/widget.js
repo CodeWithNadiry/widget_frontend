@@ -6,7 +6,7 @@
   const slug = script?.dataset?.chatbotSlug;
 
   if (!slug) {
-    console.error("HotelBot: Missing data-chatbot-slug attribute.");
+    console.error("Hostmind: Missing data-chatbot-slug attribute.");
     return;
   }
 
@@ -58,7 +58,7 @@
   function postViewport() {
     iframe.contentWindow?.postMessage(
       { source: "hotelbot-host", type: "viewport", mobile: isRealMobile() },
-      "*"
+      "*",
     );
   }
 

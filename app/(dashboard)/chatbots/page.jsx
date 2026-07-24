@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useChatbots, useDeleteChatbot } from "@/hooks/useChatbots";
 import Modal from "@/components/ui/Modal";
 
@@ -11,8 +11,20 @@ export default function ChatbotsPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedChatbotId, setSelectedChatbotId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState("list"); // "list" | "grid"
 
-  const chatbots = data?.chatbots ?? [];
+  const allChatbots = data?.chatbots ?? [];
+
+  const chatbots = useMemo(() => {
+    if (!search.trim()) return allChatbots;
+    const q = search.trim().toLowerCase();
+    return allChatbots.filter((bot) => {
+      const name = (bot.name ?? "").toLowerCase();
+      const slug = (bot.slug ?? "").toLowerCase();
+      return name.includes(q) || slug.includes(q);
+    });
+  }, [allChatbots, search]);
 
   function handleDeleteClick(chatbotId) {
     setSelectedChatbotId(chatbotId);
@@ -20,7 +32,7 @@ export default function ChatbotsPage() {
   }
 
   function handleDeleteConfirm() {
-    if (selectedChatbotId) {
+    if (selectedChatbotId && !isPending) {
       deleteChatbot(selectedChatbotId, {
         onSettled: () => {
           setDeleteOpen(false);
@@ -50,19 +62,96 @@ export default function ChatbotsPage() {
         </Link>
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 animate-pulse">
-              <div className="w-10 h-10 rounded-lg bg-slate-100" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 bg-slate-100 rounded w-40" />
-                <div className="h-3 bg-slate-100 rounded w-24" />
-              </div>
-            </div>
-          ))}
+      {/* Search + view toggle */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 min-w-0">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search chatbots…"
+            className="w-full bg-white border border-slate-200 text-[14px] text-slate-700 placeholder:text-slate-400 pl-9 pr-3.5 h-10 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-colors"
+          />
         </div>
-      ) : chatbots.length === 0 ? (
+
+        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            aria-label="List view"
+            aria-pressed={view === "list"}
+            className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
+              view === "list"
+                ? "bg-blue-50 text-blue-600"
+                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("grid")}
+            aria-label="Grid view"
+            aria-pressed={view === "grid"}
+            className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors cursor-pointer ${
+              view === "grid"
+                ? "bg-blue-50 text-blue-600"
+                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5" />
+              <rect x="14" y="3" width="7" height="7" rx="1.5" />
+              <rect x="3" y="14" width="7" height="7" rx="1.5" />
+              <rect x="14" y="14" width="7" height="7" rx="1.5" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        view === "grid" ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-white border border-slate-200 rounded-xl overflow-hidden animate-pulse">
+                <div className="w-full aspect-[16/9] bg-slate-100" />
+                <div className="p-4 space-y-2">
+                  <div className="h-4 bg-slate-100 rounded w-3/4" />
+                  <div className="h-3 bg-slate-100 rounded w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 flex items-center gap-4 animate-pulse">
+                <div className="w-10 h-10 rounded-lg bg-slate-100" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-100 rounded w-40" />
+                  <div className="h-3 bg-slate-100 rounded w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : allChatbots.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center py-16 text-center">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl mb-3">🤖</div>
           <p className="text-[15px] font-medium text-slate-900 mb-1">No chatbots yet</p>
@@ -73,6 +162,50 @@ export default function ChatbotsPage() {
           >
             Create chatbot
           </Link>
+        </div>
+      ) : chatbots.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-xl flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl mb-3">🔍</div>
+          <p className="text-[15px] font-medium text-slate-900 mb-1">No chatbots match your search</p>
+          <p className="text-[14px] text-slate-500">Try a different name or clear the search.</p>
+        </div>
+      ) : view === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {chatbots.map((bot) => (
+            <div
+              key={bot.chatbotId}
+              className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow"
+            >
+              <div className="w-full aspect-[16/12] bg-blue-50 flex items-center justify-center overflow-hidden">
+                {bot.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={bot.logoUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl">🤖</span>
+                )}
+              </div>
+              <div className="p-4 flex flex-col gap-3">
+                <div className="min-w-0">
+                  <p className="text-[15px] font-semibold text-slate-900 truncate">{bot.name}</p>
+                  <p className="text-sm text-slate-400 font-mono truncate">{bot.slug}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/chatbots/${bot.chatbotId}`}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-[14px] font-medium text-slate-600 border border-slate-300 px-3 h-9 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    Manage
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteClick(bot.chatbotId)}
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 text-[14px] font-medium text-red-600 border border-red-200 px-3 h-9 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -85,7 +218,7 @@ export default function ChatbotsPage() {
                 <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-xl shrink-0 overflow-hidden">
                   {bot.logoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={bot.logoUrl} alt="" className="w-full h-full object-cover" />
+                    <img src={bot.logoUrl} alt="" className="w-full h-full object-cover " />
                   ) : (
                     "🤖"
                   )}

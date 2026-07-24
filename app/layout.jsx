@@ -1,9 +1,9 @@
 import "./globals.css";
 import Providers from "@/components/Providers";
 export const metadata = {
-  title: "HotelBot Admin",
+  title: "Hostmind",
   icons: {
-    icon: "/chatboticon.png",
+    icon: "/logo-mark.svg",
   },
 };
 
